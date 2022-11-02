@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:smtp="http://www.mulesoft.org/schema/mule/smtp" xmlns:secure-property-placeholder="http://www.mulesoft.org/schema/mule/secure-property-placeholder" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:mot-error-handler="http://www.mulesoft.org/schema/mule/mot-error-handler" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/secure-property-placeholder http://www.mulesoft.org/schema/mule/secure-property-placeholder/current/mule-secure-property-placeholder.xsd
+http://www.mulesoft.org/schema/mule/mot-error-handler http://www.mulesoft.org/schema/mule/mot-error-handler/current/mule-mot-error-handler.xsd
+http://www.mulesoft.org/schema/mule/smtp http://www.mulesoft.org/schema/mule/smtp/current/mule-smtp.xsd">
+    <http:request-config name="HTTPS_Layer7_Configuration" protocol="HTTPS" host="${host}" port="${port}" basePath="${basepath}" responseTimeout="60000" doc:name="HTTP Request Configuration"/>
+    <secure-property-placeholder:config name="Secure_Property_Placeholder" key="${mule.encrypt.key}" location="mule-${mule.env}.properties" doc:name="Secure Property Placeholder"/>
+    <mot-error-handler:config name="MotErrorHandler__SMTP_Configuration" Port="${smtpport}" SMTPHost="${smtphost}" doc:name="MotErrorHandler: SMTP Configuration"/>
+    <flow name="moto_eserviceportalFlow">
+        <poll doc:name="Poll">
+            <fixed-frequency-scheduler frequency="15" timeUnit="MINUTES"/>
+            <logger message="Eservice Portal Code Started" level="INFO" doc:name="Logger"/>
+        </poll>
+        <http:request config-ref="HTTPS_Layer7_Configuration" path="token" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:query-param paramName="client_id" value="${client_id}"/>
+                <http:query-param paramName="client_secret" value="${client_secret}"/>
+                <http:query-param paramName="grant_type" value="${grant_type}"/>
+                <http:header headerName="Content-Type" value="application/x-www-form-urlencoded"/>
+            </http:request-builder>
+        </http:request>
+        <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+        <choice doc:name="Choice">
+            <when expression="message.inboundProperties['http.status'] == '200'">
+                <logger message="Status Code : #[message.inboundProperties['http.status']]" level="INFO" doc:name="Logger"/>
+            </when>
+            <otherwise>
+                <logger level="INFO" doc:name="Logger"/>
+                <set-payload value="#['Hi Team'+'\n'+'\n'+'Eservice Portal has been failed due to below reason'+'\n'+'\n'+payload + '\n' +'\n'+'StatusCode:' +message.inboundProperties['http.status'] +'\n'+'\n'+ 'Kindly Take Necessary action']" doc:name="Set Payload"/>
+                <smtp:outbound-endpoint host="${smtphost}" port="${smtpport}" to="${To}" from="${From}" subject="Critical:moto_eserviceportal has failed " responseTimeout="10000" doc:name="SMTP"/>
+            </otherwise>
+        </choice>
+        <catch-exception-strategy doc:name="Catch Exception Strategy">
+            <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+            <set-payload value="#['Hi Team'+'\n'+'\n'+'Eservice Portal has been failed due to below reason'+'\n'+'\n'+payload + '\n' +'\n'+'StatusCode:' +message.inboundProperties['http.status'] +'\n'+'\n'+ 'Kindly Take Necessary action']" doc:name="Set Payload"/>
+            <smtp:outbound-endpoint host="${smtphost}" port="${smtpport}" to="${To}" from="${From}" subject="Critical:moto_eserviceportal has failed " responseTimeout="10000" doc:name="SMTP"/>
+        </catch-exception-strategy>
+    </flow>
+</mule>
